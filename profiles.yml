@@ -1,0 +1,40 @@
+db_benchmark:
+  target: pg_default
+  outputs:
+    pg_default:
+      type: postgres
+      host: localhost
+      user: user
+      password: password
+      port: 5432
+      dbname: procurement
+      schema: public
+      threads: 4
+
+    pg_olap:
+      type: postgres
+      host: localhost
+      user: user
+      password: password
+      port: 5433
+      dbname: procurement
+      schema: public
+      threads: 8
+
+    clickhouse:
+      type: clickhouse
+      host: localhost
+      port: 8123
+      user: user
+      password: password
+      schema: procurement
+      threads: 8
+
+    starrocks:
+      type: starrocks
+      host: localhost
+      port: 9030
+      username: root
+      password: ""
+      schema: procurement
+      threads: 8
