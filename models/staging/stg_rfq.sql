@@ -2,7 +2,7 @@
 
 with base as (
     select pr_id, pr_no, pr_date
-    from {{ ref('fct_pr') }}
+    from {{ ref('stg_pr') }}
     where pr_status = 'APPROVED'
 )
 select 
