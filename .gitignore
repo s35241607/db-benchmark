@@ -8,3 +8,20 @@ wheels/
 
 # Virtual environments
 .venv
+
+# dbt artifacts
+target/
+dbt_packages/
+logs/
+
+# Development artifacts
+seeds/*.csv
+!seeds/numbers_1000.csv
+output_sql.txt
+starrocks_seed_debug.txt
+starrocks_seed_error.txt
+setup_advanced_schema.py
+extract_sql.py
+
+# dbt profile (contains passwords, but usually managed via profiles.yml)
+profiles.yml

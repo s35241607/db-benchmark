@@ -1,5 +1,4 @@
 {{ config(materialized='table') }}
-
 with base as (
     select a.id + (b.id - 1) * 1000 as po_id
     from {{ ref('numbers_1000') }} as a
@@ -15,5 +14,17 @@ select
         when 0 then 'CLOSED'
         when 1 then 'CANCELLED'
         else 'OPEN'
-    end as po_status
+    end as po_status,
+    {{ mod_func('po_id', '50') }} + 1 as buyer_id,
+    case {{ mod_func('po_id', '4') }}
+        when 0 then 'FOB'
+        when 1 then 'CIF'
+        when 2 then 'EXW'
+        else 'DDP'
+    end as incoterms,
+    case {{ mod_func('po_id', '3') }}
+        when 0 then 'Standard'
+        when 1 then 'Blanket'
+        else 'Contract'
+    end as po_type
 from base

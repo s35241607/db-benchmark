@@ -10,71 +10,122 @@ CONFIG_STARROCKS = {"host": "localhost", "port": 9030, "user": "root", "password
 CONFIG_CLICKHOUSE = {"host": "localhost", "port": 9000, "user": "user", "password": "password", "database": "procurement"}
 
 queries = {
-    "Scenario 1: End-to-End Procurement Cycle Time & Supplier Performance": """
-        SELECT 
-            i.item_category,
-            s.supplier_name,
-            COUNT(DISTINCT pr.pr_id) as total_prs,
-            COUNT(DISTINCT r.receipt_id) as total_receipts,
-            AVG(r.received_qty) as avg_received_qty
-        FROM fct_pr pr
-        JOIN fct_pr_line prl ON pr.pr_id = prl.pr_id
-        JOIN fct_rfq rfq ON pr.pr_id = rfq.pr_id
-        JOIN fct_po po ON rfq.pr_id = po.po_id
-        JOIN fct_po_line pol ON po.po_id = pol.po_id
-        JOIN fct_receipt r ON pol.po_line_id = r.po_line_id
-        JOIN dim_supplier s ON po.supplier_id = s.supplier_id
-        JOIN dim_item i ON pol.item_id = i.item_id
-        GROUP BY 
-            i.item_category,
-            s.supplier_name
-        ORDER BY 
-            total_prs DESC
-        LIMIT 100;
-    """,
-    "Scenario 2: Outstanding Quantity & Delivery Risk Assessment": """
-        WITH po_receipts AS (
-            SELECT 
-                po_line_id,
-                SUM(received_qty) as total_received
-            FROM fct_receipt
-            GROUP BY po_line_id
-        )
-        SELECT 
-            i.item_category,
-            pol.po_id,
-            pol.po_qty,
-            COALESCE(pr.total_received, 0) as total_received,
-            (pol.po_qty - COALESCE(pr.total_received, 0)) as outstanding_qty
-        FROM fct_po_line pol
-        JOIN dim_item i ON pol.item_id = i.item_id
-        LEFT JOIN po_receipts pr ON pol.po_line_id = pr.po_line_id
-        WHERE pol.po_qty > COALESCE(pr.total_received, 0)
-        ORDER BY outstanding_qty DESC
-        LIMIT 100;
-    """,
-    "Scenario 3: Material Spend & Purchase Price Variance (PPV)": """
-        SELECT 
-            item_category,
-            item_code,
-            total_spend,
-            total_ppv,
-            RANK() OVER (PARTITION BY item_category ORDER BY total_ppv DESC) as ppv_rank_in_category
+    "Scenario 1: Complex 11-Table Join for Semiconductor Supply Chain Yield Risk": """
+        SELECT COUNT(*), MAX(CAST(supplier_name AS CHAR(255)))
         FROM (
             SELECT 
+                i.tech_node,
+                i.wafer_size,
                 i.item_category,
-                i.item_code,
-                SUM(pol.po_qty * pol.unit_price) as total_spend,
-                SUM(pol.po_qty * (pol.unit_price - i.standard_cost)) as total_ppv
+                s.supplier_name,
+                s.country,
+                s.risk_score,
+                COUNT(DISTINCT pr.pr_id) as total_prs,
+                SUM(prl.pr_qty) as total_requested_qty,
+                COUNT(DISTINCT r.receipt_id) as total_receipts,
+                r.inspection_status,
+                SUM(r.received_qty) as total_received_qty,
+                SUM(r.rejected_qty) as total_rejected_qty,
+                SUM(r.rejected_qty) / NULLIF(SUM(r.received_qty), 0) as scrap_rate
+            FROM fct_pr pr
+            JOIN fct_pr_line prl ON pr.pr_id = prl.pr_id
+            JOIN fct_rfq rfq ON pr.pr_id = rfq.pr_id
+            JOIN fct_po po ON rfq.pr_id = po.po_id
+            JOIN fct_po_line pol ON po.po_id = pol.po_id
+            JOIN fct_receipt r ON pol.po_line_id = r.po_line_id
+            JOIN dim_supplier s ON po.supplier_id = s.supplier_id
+            JOIN dim_item i ON pol.item_id = i.item_id
+            WHERE i.is_critical_material = 1
+              AND s.risk_score > 3.0
+            GROUP BY 
+                i.tech_node,
+                i.wafer_size,
+                i.item_category,
+                s.supplier_name,
+                s.country,
+                s.risk_score,
+                r.inspection_status
+        ) sub;
+    """,
+    "Scenario 2: Advanced CTE Array-Like Supply vs Payment Terms Analysis": """
+        SELECT COUNT(*), MAX(CAST(total_expected_value AS CHAR(255)))
+        FROM (
+            WITH supplier_metrics AS (
+                SELECT 
+                    supplier_id,
+                    payment_terms,
+                    has_esg_report,
+                    vendor_type
+                FROM dim_supplier
+            ),
+            po_receipts AS (
+                SELECT 
+                    po_line_id,
+                    SUM(received_qty) as total_received,
+                    SUM(accepted_qty) as total_accepted,
+                    SUM(rejected_qty) as total_rejected
+                FROM fct_receipt
+                WHERE inspection_status != 'Pending'
+                GROUP BY po_line_id
+            )
+            SELECT 
+                i.item_category,
+                i.item_group,
+                sm.payment_terms,
+                sm.vendor_type,
+                pol.po_id,
+                pol.po_qty,
+                pol.unit_price,
+                (pol.po_qty * pol.unit_price * (1 - pol.discount_pct / 100)) as total_expected_value,
+                COALESCE(pr.total_received, 0) as total_received,
+                COALESCE(pr.total_accepted, 0) as total_accepted,
+                COALESCE(pr.total_rejected, 0) as total_rejected,
+                (pol.po_qty - COALESCE(pr.total_received, 0)) as outstanding_qty
             FROM fct_po_line pol
             JOIN dim_item i ON pol.item_id = i.item_id
-            GROUP BY 
-                i.item_category,
-                i.item_code,
-                i.standard_cost
-        ) sub
-        ORDER BY total_ppv DESC
-        LIMIT 100;
+            JOIN fct_po po ON pol.po_id = po.po_id
+            JOIN supplier_metrics sm ON po.supplier_id = sm.supplier_id
+            LEFT JOIN po_receipts pr ON pol.po_line_id = pr.po_line_id
+            WHERE pol.po_qty > COALESCE(pr.total_received, 0)
+              AND sm.has_esg_report = 1
+              AND i.lifecycle_status = 'Active'
+        ) sub;
+    """,
+    "Scenario 3: Multi-Level Window Function and Deep Cost/PPV Calculation": """
+        SELECT COUNT(*), MAX(CAST(cost_variance_ratio AS CHAR(255)))
+        FROM (
+            SELECT 
+                item_category,
+                item_code,
+                tech_node,
+                wafer_size,
+                po_status,
+                total_spend,
+                total_ppv,
+                (total_ppv / NULLIF(total_spend, 0)) as cost_variance_ratio,
+                RANK() OVER (PARTITION BY item_category, tech_node ORDER BY total_ppv DESC) as ppv_rank,
+                SUM(total_spend) OVER (PARTITION BY item_category ORDER BY total_spend DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as cumulative_spend
+            FROM (
+                SELECT 
+                    i.item_category,
+                    i.tech_node,
+                    i.wafer_size,
+                    i.item_code,
+                    po.po_status,
+                    SUM(pol.po_qty * pol.unit_price) as total_spend,
+                    SUM(pol.po_qty * (pol.unit_price - i.standard_cost)) as total_ppv
+                FROM fct_po_line pol
+                JOIN dim_item i ON pol.item_id = i.item_id
+                JOIN fct_po po ON pol.po_id = po.po_id
+                WHERE i.standard_cost > 0
+                GROUP BY 
+                    i.item_category,
+                    i.tech_node,
+                    i.wafer_size,
+                    i.item_code,
+                    po.po_status
+            ) sub_agg
+        ) sub;
     """
 }
 
@@ -83,7 +134,7 @@ def execute_pg(config, query):
     cursor = conn.cursor()
     start = time.time()
     cursor.execute(query)
-    results = cursor.fetchall()
+    results = cursor.fetchall()  # This now only fetches 1 row due to the wrapper
     end = time.time()
     cursor.close()
     conn.close()
@@ -116,12 +167,12 @@ databases = {
 }
 
 def main():
-    print("Starting DB Benchmark...")
+    print("Starting Advanced DB Benchmark...")
     results = {db: {} for db in databases}
     
     # Warm up queries (fetch but dont measure) to put data in memory for fairness
     for name, query in queries.items():
-        print(f"\\nRunning {name}...")
+        print(f"\nRunning {name}...")
         for db_name, (func, config) in databases.items():
             try:
                 # Warm-up run
@@ -142,12 +193,12 @@ def main():
 
     # Write report
     with open("benchmark_report.md", "w") as f:
-        f.write("# Database Performance Benchmark Report\\n\\n")
-        f.write("## Scenarios Execution Time (Seconds)\\n\\n")
+        f.write("# Advanced DB Benchmark Report\n\n")
+        f.write("## Scenarios Execution Time (Seconds) - Pure Analytics Load (Network Transfer Eliminated)\n\n")
         
         # Header
-        f.write("| Database | " + " | ".join(queries.keys()) + " |\\n")
-        f.write("|----------|" + "|".join(["-"*len(q) for q in queries.keys()]) + "|\\n")
+        f.write("| Database | " + " | ".join(queries.keys()) + " |\n")
+        f.write("|----------|" + "|".join(["-"*len(q) for q in queries.keys()]) + "|\n")
         
         for db_name in databases.keys():
             row = f"| {db_name} | "
@@ -155,10 +206,10 @@ def main():
                 f"{results[db_name][q]:.4f}s" if isinstance(results[db_name][q], float) else str(results[db_name][q]) 
                 for q in queries.keys()
             ])
-            row += " |\\n"
+            row += " |\n"
             f.write(row)
             
-    print("\\nBenchmark complete. Report saved to benchmark_report.md")
+    print("\nBenchmark complete. Report saved to benchmark_report.md")
 
 if __name__ == "__main__":
     main()

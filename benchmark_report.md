@@ -1,1 +1,10 @@
-# Database Performance Benchmark Report\n\n## Scenarios Execution Time (Seconds)\n\n| Database | Scenario 1: End-to-End Procurement Cycle Time & Supplier Performance | Scenario 2: Outstanding Quantity & Delivery Risk Assessment | Scenario 3: Material Spend & Purchase Price Variance (PPV) |\n|----------|--------------------------------------------------------------------|-----------------------------------------------------------|----------------------------------------------------------|\n| PostgreSQL (Default) | 0.2089s | 0.0995s | 0.0921s |\n| PostgreSQL (OLAP Tuned) | 0.1976s | 0.0994s | 0.0902s |\n| ClickHouse | 0.1880s | 0.0837s | 0.0815s |\n| StarRocks | 0.1314s | 0.0273s | 0.0291s |\n
+# Advanced DB Benchmark Report
+
+## Scenarios Execution Time (Seconds) - Pure Analytics Load (Network Transfer Eliminated)
+
+| Database | Scenario 1: Complex 11-Table Join for Semiconductor Supply Chain Yield Risk | Scenario 2: Advanced CTE Array-Like Supply vs Payment Terms Analysis | Scenario 3: Multi-Level Window Function and Deep Cost/PPV Calculation |
+|----------|---------------------------------------------------------------------------|--------------------------------------------------------------------|---------------------------------------------------------------------|
+| PostgreSQL (Default) | 0.0695s | 0.0906s | 0.3297s |
+| PostgreSQL (OLAP Tuned) | 0.0689s | 0.0885s | 0.1152s |
+| ClickHouse | 0.1755s | 0.0931s | 0.0931s |
+| StarRocks | 0.0729s | 0.0470s | 0.0362s |

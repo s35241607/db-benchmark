@@ -35,3 +35,7 @@ seeds:
     dim_item:
       +column_types:
         standard_cost: FLOAT
+        yield_rate_expected: FLOAT
+    dim_supplier:
+      +column_types:
+        risk_score: FLOAT
